@@ -22,6 +22,7 @@ todo:
 autodetect windows and OSX, use better defaults for them
 figure out how to change settings and download logged data
 port to C/C++ so windows-people don't need python
+base: https://github.com/parametrek/gm1020/blob/master/ut382.py
 """
 
 lcd_7seg = {0x00:None, 0x7B:0, 0x60:1, 0x5E:2, 0x7C:3,
