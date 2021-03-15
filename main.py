@@ -7,9 +7,11 @@ import argparse
 import datetime
 
 import serial
+
 import serial.tools.list_ports
 
-default_port = '/dev/ttyUSB0'
+
+default_port = '/dev/cu.usbserial-01EC05B5'
 baud = 19200
 timeout = 0.2
 default_timestamp = '%Y-%m-%d %H:%M:%S.%f'
@@ -67,7 +69,7 @@ def build_parser():
             'Todo: program meter settings, start monitor remotely, download logged readings.'
             'To run --monitor for 12 hours and then automatically stop: "timeout -s INT 12h python3 ut382.py --monitor"',
             )))
-    p.add_argument('--port', dest='port', default=default_port,
+    p.add_argument('--port', dest='port', default=False,
         help='Location of serial port (default: %s)' % default_port)
     p.add_argument('--file', dest='path', default='',
         help='Path to save TSV data to (default: display on stdout)')
@@ -87,8 +89,26 @@ def load_options():
     parser = build_parser()
     options = parser.parse_args()
     if options.path == '-':
-        option.path = ''
+        options.path = ''
     return options
+
+
+def list_ports():
+    ports = serial.tools.list_ports.comports()
+    ret_ports = list()
+
+    for num, (port, desc, hwid) in enumerate(sorted(ports)):
+        print("({}) {}: {} [{}]".format(num, port, desc, hwid))
+        ret_ports.append(
+            {
+                "port": port,
+                "desc": desc,
+                "hwid": hwid
+            }
+        )
+
+    return ret_ports
+
 
 def listen(n=33):
     reply = list(com.read(n))
@@ -174,13 +194,24 @@ def live_raw():
     com.timeout = 0.02  # single byte timeout
     reply  = []
     reply2 = []
+
+    error_countdown = 10
+
     while True:
         reply = listen(1)
         if reply:
             reply2.extend(reply)
             continue
         if not reply2:
-            continue
+            if error_countdown > 0:
+                print("Waiting for device...")
+                error_countdown -= 1
+
+                continue
+            else:
+                continue
+
+
         yield reply2
         reply2 = []
 
@@ -273,34 +304,46 @@ def core(options):
             old = new
             redirect.write('\t'.join([data['time'], lux, data['unit']]) + '\n')
 
+
     if options.path:
         redirect.close()
 
-def list_ports():
-    ports = serial.tools.list_ports.comports()
-
-    for port, desc, hwid in sorted(ports):
-        print("{}: {} [{}]".format(port, desc, hwid))
-
-
 def main():
-    list_ports()
+    options = load_options()
+
+    print(options.port)
+
+    if not options.port:
+        found_ports = list_ports()
+
+        ans_serial = input("Choose serial port"
+                           "\ntype x to abort"
+                           "\nAns: ")
+
+        options.monitor = True
+        options.delta = True
+
+        if ans_serial == 'x':
+            return
+        elif int(ans_serial) and int(ans_serial) < len(list_ports()):
+            choosen_port = found_ports[int(ans_serial)]
+            print(choosen_port)
+            options.port = choosen_port['port']
 
 
-    # options = load_options()
-    # init(options.port)
-    #
-    # try:
-    #     #live_debug_raw()
-    #     #live_debug()
-    #     core(options)
-    # except KeyboardInterrupt:
-    #     pass
-    # except:
-    #     cleanup()
-    #     raise
-    #
-    # cleanup()
+    init(options.port)
+
+    try:
+        #live_debug_raw()
+        # live_debug()
+        core(options)
+    except KeyboardInterrupt:
+        pass
+    except:
+        cleanup()
+        raise
+
+    cleanup()
 
 if __name__ == "__main__":
     main()
