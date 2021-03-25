@@ -22,7 +22,7 @@ from logs import logger
 
 SKIP_CHECK_LIST = True
 
-cl200a_cmd_dict = {'command_01': '',
+cl200a_cmd_dict = {'command_01': '00011200',
                    'command_02': '00021200',
                    'command_03': '00031200',
                    'command_08': '00081200',
@@ -55,9 +55,16 @@ def find_all_serial_ports():
 def find_all_luxmeters():
     """ Get all lux meters connected into PC."""
     logger.info("Looking for luxmeters...")
-    list = [p.device for p in find_all_serial_ports() if 'FTDI' in p.manufacturer]
-    logger.debug(f"Found luxmeters: {list}")
-    return list
+    found_ports = find_all_serial_ports()
+    if found_ports:
+        # for item in found_ports:
+        #     print(f"port: {item}")
+        #     print(f"Man: {item.manufacturer}")
+        list = [p.device for p in found_ports if p.manufacturer and 'FTDI' in p.manufacturer]
+        logger.debug(f"Found luxmeters: {list}")
+        return list
+    else:
+        return
 
 
 def connection_konica(ser):
