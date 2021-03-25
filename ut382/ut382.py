@@ -358,6 +358,6 @@ def ut382():
 
     cleanup()
 
-#
-# if __name__ == "__main__":
-#     ut382()
+
+if __name__ == "__main__":
+    ut382()
