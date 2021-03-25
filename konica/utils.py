@@ -18,7 +18,7 @@ from serial import Serial, SerialException, PARITY_NONE, STOPBITS_ONE, EIGHTBITS
 from serial.tools import list_ports
 from time import sleep
 
-from src.logs import logger
+from logs import logger
 
 SKIP_CHECK_LIST = True
 

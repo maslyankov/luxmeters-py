@@ -1,10 +1,14 @@
 import logging
 import sys
 
+# Create a custom logger
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
 # - Create handlers
 # Console log
 c_handler = logging.StreamHandler()
-c_handler.setLevel(getattr(logging, constants.LOG_LEVEL))
+c_handler.setLevel(getattr(logging, "DEBUG"))
 
 # File
 # f_handler = logging.FileHandler(constants.LOG_FILE)

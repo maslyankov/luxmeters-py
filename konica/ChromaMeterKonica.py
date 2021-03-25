@@ -1,9 +1,9 @@
 # coding=utf-8
-
+from time import sleep
 from serial import PARITY_EVEN, SEVENBITS, SerialException
 
-from src.logs import logger
-from src.base.devices.konica.utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, serial_port_luxmeter, connect_serial_port
+from logs import logger
+from utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, serial_port_luxmeter, connect_serial_port
 
 SKIP_CHECK_LIST = True
 
@@ -155,3 +155,13 @@ class ChromaMeterKonica(object):
         lux = round(float(signal * lux_num * (10 ** lux_pow)), 3)
         return lux
 
+
+if __name__ == "__main__":
+    luxmeter = ChromaMeterKonica()
+
+    while True:
+        curr_lux = luxmeter.get_lux()
+
+        print(f"Reading: {curr_lux} LUX")
+
+        # sleep(1)
