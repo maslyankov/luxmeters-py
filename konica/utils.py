@@ -78,9 +78,18 @@ def connection_konica(ser):
     return_connection = None
     for i in range(2):
         write_serial_port(ser=ser, cmd=cmd_request, sleep_time=0.5)
-        pc_connected_mode = ser.readline().decode('ascii')
+        try:
+            ser_read = ser.readline()
+        except SerialException as e:
+            logger.exception(e)
+            return_connection = False
+
+            return return_connection
+
+        pc_connected_mode = ser_read.decode('ascii')
         ser.flushInput()
         ser.flushOutput()
+
         # Check that the response from the CL-200A is correct.
         if SKIP_CHECK_LIST:
             return_connection = True
