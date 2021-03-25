@@ -121,47 +121,69 @@ class ChromaMeterKonica(object):
         # read data
         write_serial_port(obj=self, ser=self.ser, cmd=cmd_read, sleep_time=0)
         try:
-            result = self.ser.readline().decode('ascii')
+            serial_ret = self.ser.readline()
+            if not len(serial_ret):
+                logger.debug(f"Serial got: {serial_ret}")
+                return
+
+            result = serial_ret.decode('ascii')
         except SerialException:
             self.is_alive = False
             logger.error('Connection to Luxmeter was lost.')
             return
 
-        if result[6] in ['1', '2', '3']:
-            err = 'Switch off the CL-200A and then switch it back on'
-            logger.error(f'Error {err}')
-            raise ConnectionResetError(err)
-        if result[6] == '5':
-            logger.error('Measurement value over error. The measurement exceed the CL-200A measurement range.')
-        if result[6] == '6':
-            err = 'Low luminance error. Luminance is low, resulting in reduced calculation accuracy ' \
-                  'for determining chromaticity'
-            logger.error(f'{err}')
-        # if result[7] == '6':
-        #     err= 'Switch off the CL-200A and then switch it back on'
-        #     raise Exception(err)
-        if result[8] == '1':
-            err = 'Battery is low. The battery should be changed immediately or the AC adapter should be used.'
-            logger.error(err)
-            raise ConnectionAbortedError(err)
-        # Convert Measurement
-        if result[9] == '+':
-            signal = 1
-        else:
-            signal = -1
-        lux_num = float(result[10:14])
-        lux_pow = float(result[14]) - 4
-        # lux = float(signal * lux_num * (10 ** lux_pow))
-        lux = round(float(signal * lux_num * (10 ** lux_pow)), 3)
-        return lux
+        try:
+            if result[6] in ['1', '2', '3']:
+                err = 'Switch off the CL-200A and then switch it back on'
+                logger.error(f'Error {err}')
+                raise ConnectionResetError(err)
+            if result[6] == '5':
+                logger.error('Measurement value over error. The measurement exceed the CL-200A measurement range.')
+            if result[6] == '6':
+                err = 'Low luminance error. Luminance is low, resulting in reduced calculation accuracy ' \
+                      'for determining chromaticity'
+                logger.error(f'{err}')
+            # if result[7] == '6':
+            #     err= 'Switch off the CL-200A and then switch it back on'
+            #     raise Exception(err)
+            if result[8] == '1':
+                err = 'Battery is low. The battery should be changed immediately or the AC adapter should be used.'
+                logger.error(err)
+                raise ConnectionAbortedError(err)
+            # Convert Measurement
+            if result[9] == '+':
+                signal = 1
+            else:
+                signal = -1
+            lux_num = float(result[10:14])
+            lux_pow = float(result[14]) - 4
+            # lux = float(signal * lux_num * (10 ** lux_pow))
+            lux = round(float(signal * lux_num * (10 ** lux_pow)), 3)
+
+            # logger.debug(f"Returning {lux} luxes")
+            return lux
+        except IndexError as e:
+            logger.debug(f"result: {result}")
+            logger.error(e)
+            exit(1)
 
 
 if __name__ == "__main__":
     luxmeter = ChromaMeterKonica()
+    timeout = 3
 
     while True:
         curr_lux = luxmeter.get_lux()
 
-        print(f"Reading: {curr_lux} LUX")
+        if curr_lux:
+            print(f"Reading: {curr_lux} LUX")
+        else:
+            print(f"Reading is {curr_lux}, sleeping 1 sec")
+            print(f"Is alive: {luxmeter.is_alive}")
+            sleep(1)
+            timeout -= 1
+            if not timeout:
+                print("Timeout!")
+                break
 
         # sleep(1)
