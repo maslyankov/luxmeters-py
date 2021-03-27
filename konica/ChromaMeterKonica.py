@@ -3,9 +3,11 @@ from time import sleep
 from serial import PARITY_EVEN, SEVENBITS, SerialException
 
 from logs import logger
-from utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, serial_port_luxmeter, connect_serial_port
+from utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, \
+                  serial_port_luxmeter, connect_serial_port, check_measurement
 
 SKIP_CHECK_LIST = True
+DEBUG = True
 
 
 class ChromaMeterKonica(object):
@@ -24,15 +26,15 @@ class ChromaMeterKonica(object):
         try:
             self.ser = connect_serial_port(self.port, parity=PARITY_EVEN, bytesize=SEVENBITS)
         except SerialException:
-            logger.error('Error: Could not connect to Lux Meter')
-            self.is_alive = False
-            return
+            # logger.error('Error: Could not connect to Lux Meter')
+            raise Exception("Could not connect to luxmeter")
         try:
             self.__connection()
             self.__hold_mode()
             self.__ext_mode()
         except SerialException:
-            logger.error(f"'Lux meter not found. Check that the cable is properly connected.'")
+            # logger.error(f"'Lux meter not found. Check that the cable is properly connected.'")
+            raise Exception(f"'Lux meter not found. Check that the cable is properly connected.'")
 
     def __connection(self):
         """
@@ -102,11 +104,7 @@ class ChromaMeterKonica(object):
             else:
                 break
 
-    def get_lux(self):
-        """
-        Perform lux level measurement.
-        :return: String with lux measured.
-        """
+    def perform_measurement(self, read_cmd):
         if not self.is_alive:
             return
 
@@ -116,7 +114,7 @@ class ChromaMeterKonica(object):
 
         # Perform measurement
         cmd_ext = cmd_formatter(self.cmd_dict['command_40r'])
-        cmd_read = cmd_formatter(self.cmd_dict['command_02'])
+        cmd_read = cmd_formatter(read_cmd)
         write_serial_port(obj=self, ser=self.ser, cmd=cmd_ext, sleep_time=0.5)
         # read data
         write_serial_port(obj=self, ser=self.ser, cmd=cmd_read, sleep_time=0)
@@ -132,24 +130,21 @@ class ChromaMeterKonica(object):
             logger.error('Connection to Luxmeter was lost.')
             return
 
+        check_measurement(result)
+
+        if DEBUG:
+            logger.debug(f"Got raw data: {result}")
+
+        return result
+
+    def get_lux(self):
+        """
+        Perform lux level measurement.
+        :return: String with lux measured.
+        """
         try:
-            if result[6] in ['1', '2', '3']:
-                err = 'Switch off the CL-200A and then switch it back on'
-                logger.error(f'Error {err}')
-                raise ConnectionResetError(err)
-            if result[6] == '5':
-                logger.error('Measurement value over error. The measurement exceed the CL-200A measurement range.')
-            if result[6] == '6':
-                err = 'Low luminance error. Luminance is low, resulting in reduced calculation accuracy ' \
-                      'for determining chromaticity'
-                logger.error(f'{err}')
-            # if result[7] == '6':
-            #     err= 'Switch off the CL-200A and then switch it back on'
-            #     raise Exception(err)
-            if result[8] == '1':
-                err = 'Battery is low. The battery should be changed immediately or the AC adapter should be used.'
-                logger.error(err)
-                raise ConnectionAbortedError(err)
+            result = self.perform_measurement(self.cmd_dict['command_02'])
+
             # Convert Measurement
             if result[9] == '+':
                 signal = 1
@@ -160,8 +155,47 @@ class ChromaMeterKonica(object):
             # lux = float(signal * lux_num * (10 ** lux_pow))
             lux = round(float(signal * lux_num * (10 ** lux_pow)), 3)
 
-            # logger.debug(f"Returning {lux} luxes")
+            logger.debug(f"Returning {lux} luxes")
+
             return lux
+        except IndexError as e:
+            logger.debug(f"result: {result}")
+            logger.error(e)
+            exit(1)
+
+    # Read measurement data (X, Y, Z)                   01
+    def get_xyz(self):
+        try:
+            result = self.perform_measurement(self.cmd_dict['command_01'])
+            # Convert Measurement
+            x = float(result[10:14])/10
+            y = float(result[16:20])/10
+            z = float(result[22:26])/10
+            # sth = result[27:-1]
+            # multiply = result[7:9]
+
+            logger.debug(f"X: {x}, Y: {y}, Z: {z}")
+            # logger.debug(f"Returning {lux} luxes")
+
+            return
+        except IndexError as e:
+            logger.debug(f"result: {result}")
+            logger.error(e)
+            exit(1)
+
+    # Read measurement data (EV, TCP, Δuv)              08
+    def get_ev(self):
+        try:
+            result = self.perform_measurement(self.cmd_dict['command_08'])
+            # Convert Measurement
+            ev = float(result[10:14]) / 10
+            tcp = float(result[16:20]) / 10
+            delta_uv = float(result[22:26]) / 10
+
+            logger.debug(f"EV: {ev}, TCP: {tcp}, DeltaUV: {delta_uv}")
+            # logger.debug(f"Returning {lux} luxes")
+
+            return
         except IndexError as e:
             logger.debug(f"result: {result}")
             logger.error(e)
@@ -169,21 +203,28 @@ class ChromaMeterKonica(object):
 
 
 if __name__ == "__main__":
-    luxmeter = ChromaMeterKonica()
+    try:
+        luxmeter = ChromaMeterKonica()
+    except Exception as e:
+        logger.exception(e)
+        exit(0)
+
     timeout = 3
 
     while True:
-        curr_lux = luxmeter.get_lux()
+        # curr_lux = luxmeter.get_lux()
 
-        if curr_lux:
-            print(f"Reading: {curr_lux} LUX")
-        else:
-            print(f"Reading is {curr_lux}, sleeping 1 sec")
-            print(f"Is alive: {luxmeter.is_alive}")
-            sleep(1)
-            timeout -= 1
-            if not timeout:
-                print("Timeout!")
-                break
+        luxmeter.get_ev()
+
+        # if curr_lux:
+        #     print(f"Reading: {curr_lux} LUX")
+        # else:
+        #     print(f"Reading is {curr_lux}, sleeping 1 sec")
+        #     print(f"Is alive: {luxmeter.is_alive}")
+        #     sleep(1)
+        #     timeout -= 1
+        #     if not timeout:
+        #         print("Timeout!")
+        #         break
 
         # sleep(1)

@@ -184,6 +184,26 @@ def write_serial_port(ser, cmd, sleep_time, obj=None):
     ser.reset_input_buffer()
 
 
+def check_measurement(result):
+    if result[6] in ['1', '2', '3']:
+        err = 'Switch off the CL-200A and then switch it back on'
+        logger.error(f'Error {err}')
+        raise ConnectionResetError(err)
+    if result[6] == '5':
+        logger.error('Measurement value over error. The measurement exceed the CL-200A measurement range.')
+    if result[6] == '6':
+        err = 'Low luminance error. Luminance is low, resulting in reduced calculation accuracy ' \
+              'for determining chromaticity'
+        logger.error(f'{err}')
+    # if result[7] == '6':
+    #     err= 'Switch off the CL-200A and then switch it back on'
+    #     raise Exception(err)
+    if result[8] == '1':
+        err = 'Battery is low. The battery should be changed immediately or the AC adapter should be used.'
+        logger.error(err)
+        raise ConnectionAbortedError(err)
+
+
 def clean_obj_port(obj):
     """ Perform object buffer cleaning """
     obj.close()
