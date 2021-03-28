@@ -204,6 +204,20 @@ def check_measurement(result):
         raise ConnectionAbortedError(err)
 
 
+def calc_lux(result):
+    if result[9] == '+':
+        signal = 1
+    else:
+        signal = -1
+    lux_num = float(result[10:14])
+    lux_pow = float(result[14]) - 4
+
+    # lux = float(signal * lux_num * (10 ** lux_pow))
+    lux = round(float(signal * lux_num * (10 ** lux_pow)), 3)
+
+    return lux
+
+
 def clean_obj_port(obj):
     """ Perform object buffer cleaning """
     obj.close()

@@ -4,10 +4,13 @@ from serial import PARITY_EVEN, SEVENBITS, SerialException
 
 from logs import logger
 from utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, \
-                  serial_port_luxmeter, connect_serial_port, check_measurement
+                  serial_port_luxmeter, connect_serial_port, check_measurement, calc_lux
+
+# import numpy as np
+# import luxpy as lx
 
 SKIP_CHECK_LIST = True
-DEBUG = True
+DEBUG = False
 
 
 class ChromaMeterKonica(object):
@@ -133,7 +136,7 @@ class ChromaMeterKonica(object):
         check_measurement(result)
 
         if DEBUG:
-            logger.debug(f"Got raw data: {result}")
+            logger.debug(f"Got raw data: {result.rstrip()}")
 
         return result
 
@@ -146,16 +149,10 @@ class ChromaMeterKonica(object):
             result = self.perform_measurement(self.cmd_dict['command_02'])
 
             # Convert Measurement
-            if result[9] == '+':
-                signal = 1
-            else:
-                signal = -1
-            lux_num = float(result[10:14])
-            lux_pow = float(result[14]) - 4
-            # lux = float(signal * lux_num * (10 ** lux_pow))
-            lux = round(float(signal * lux_num * (10 ** lux_pow)), 3)
+            lux = calc_lux(result)
 
-            logger.debug(f"Returning {lux} luxes")
+            if DEBUG:
+                logger.debug(f"Returning {lux} luxes")
 
             return lux
         except IndexError as e:
@@ -174,28 +171,65 @@ class ChromaMeterKonica(object):
             # sth = result[27:-1]
             # multiply = result[7:9]
 
-            logger.debug(f"X: {x}, Y: {y}, Z: {z}")
-            # logger.debug(f"Returning {lux} luxes")
+            if DEBUG:
+                logger.debug(f"X: {x}, Y: {y}, Z: {z}")
 
-            return
+            return x, y, z
         except IndexError as e:
             logger.debug(f"result: {result}")
             logger.error(e)
             exit(1)
 
+    def get_cct(self):
+        '''
+        approximate CCT using CIE 1931 xy values
+        '''
+        x, y, z = self.get_xyz()
+
+        if 0 in [x, y, z]:
+            return 0.0
+
+        small_x = x/(x+y+z)
+        small_y = y/(x+y+z)
+
+        n = (small_x-0.3320)/(0.1858-small_y)
+        cct = 437*(n**3) + 3601*(n**2) + 6861*n + 5517
+
+        logger.debug(f"x = {x}, y = {y}, z = {z}")
+        logger.debug(f"Calc CCT = {cct} K")
+        # cieobs = '1931_2'
+        #
+        # xyzD65 = lx.spd_to_xyz(lx._CIE_ILLUMINANTS['F5'], cieobs=cieobs)
+        # xyzE = np.array([100, 100, 100])
+        # xyz = np.vstack((xyzD65, xyzE))
+        #
+        # mode = 'lut'
+        #
+        # cct = int(lx.color.cct.cct.xyz_to_cct_search(xyz)[0][0])
+        # print('CCT:')
+        # print(cct)
+
+        return cct
+
     # Read measurement data (EV, TCP, Δuv)              08
-    def get_ev(self):
+    def get_delta_uv(self):
+        '''
+        Return:
+             lux, tcp, delta_uv
+        '''
         try:
             result = self.perform_measurement(self.cmd_dict['command_08'])
             # Convert Measurement
-            ev = float(result[10:14]) / 10
+            # Calc lux
+            lux = calc_lux(result)
+
             tcp = float(result[16:20]) / 10
             delta_uv = float(result[22:26]) / 10
 
-            logger.debug(f"EV: {ev}, TCP: {tcp}, DeltaUV: {delta_uv}")
-            # logger.debug(f"Returning {lux} luxes")
+            if DEBUG:
+                logger.debug(f"Illuminance: {lux} lux, TCP: {tcp}, DeltaUV: {delta_uv}")
 
-            return
+            return lux, tcp, delta_uv
         except IndexError as e:
             logger.debug(f"result: {result}")
             logger.error(e)
@@ -214,7 +248,11 @@ if __name__ == "__main__":
     while True:
         # curr_lux = luxmeter.get_lux()
 
-        luxmeter.get_ev()
+        # luxmeter.get_lux()
+        # print(luxmeter.get_xyz())
+        luxmeter.get_cct()
+        # print(luxmeter.get_delta_uv())
+        logger.debug("next..")
 
         # if curr_lux:
         #     print(f"Reading: {curr_lux} LUX")
