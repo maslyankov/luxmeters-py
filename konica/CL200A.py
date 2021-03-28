@@ -3,17 +3,17 @@ from time import sleep
 from serial import PARITY_EVEN, SEVENBITS, SerialException
 
 from logs import logger
-from utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, \
+from CL200A_utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, \
                   serial_port_luxmeter, connect_serial_port, check_measurement, calc_lux
 
-# import numpy as np
-# import luxpy as lx
+from numpy import array as np_array
+from colour import XY_TO_CCT_METHODS, XYZ_to_xy, xy_to_CCT
 
 SKIP_CHECK_LIST = True
-DEBUG = False
+DEBUG = True
 
 
-class ChromaMeterKonica(object):
+class CL200A(object):
     """
     Konica Minolta (CL - 200A)
 
@@ -21,7 +21,7 @@ class ChromaMeterKonica(object):
     http://www.konicaminolta.com.cn/instruments/download/software/pdf/CL-200A_communication_specifications.pdf
     """
 
-    def __init__(self):
+    def __init__(self) -> object:
         self.cmd_dict = cl200a_cmd_dict
         self.port = serial_port_luxmeter()
         self.is_alive = True
@@ -107,7 +107,7 @@ class ChromaMeterKonica(object):
             else:
                 break
 
-    def perform_measurement(self, read_cmd):
+    def perform_measurement(self, read_cmd) -> str:
         if not self.is_alive:
             return
 
@@ -140,7 +140,7 @@ class ChromaMeterKonica(object):
 
         return result
 
-    def get_lux(self):
+    def get_lux(self) -> float:
         """
         Perform lux level measurement.
         :return: String with lux measured.
@@ -161,7 +161,7 @@ class ChromaMeterKonica(object):
             exit(1)
 
     # Read measurement data (X, Y, Z)                   01
-    def get_xyz(self):
+    def get_xyz(self) -> tuple:
         try:
             result = self.perform_measurement(self.cmd_dict['command_01'])
             # Convert Measurement
@@ -180,7 +180,7 @@ class ChromaMeterKonica(object):
             logger.error(e)
             exit(1)
 
-    def get_cct(self):
+    def get_cct(self, methods="Hernandez 1999"):
         '''
         approximate CCT using CIE 1931 xy values
         '''
@@ -189,30 +189,46 @@ class ChromaMeterKonica(object):
         if 0 in [x, y, z]:
             return 0.0
 
-        small_x = x/(x+y+z)
-        small_y = y/(x+y+z)
-
-        n = (small_x-0.3320)/(0.1858-small_y)
-        cct = 437*(n**3) + 3601*(n**2) + 6861*n + 5517
-
         logger.debug(f"x = {x}, y = {y}, z = {z}")
-        logger.debug(f"Calc CCT = {cct} K")
-        # cieobs = '1931_2'
-        #
-        # xyzD65 = lx.spd_to_xyz(lx._CIE_ILLUMINANTS['F5'], cieobs=cieobs)
-        # xyzE = np.array([100, 100, 100])
-        # xyz = np.vstack((xyzD65, xyzE))
-        #
-        # mode = 'lut'
-        #
-        # cct = int(lx.color.cct.cct.xyz_to_cct_search(xyz)[0][0])
-        # print('CCT:')
-        # print(cct)
 
-        return cct
+        if isinstance(methods, str):
+            methods = [methods]
+
+        ccts = list()
+
+        for curr_method in methods:
+            if curr_method == 'me_mccamy':
+                # McCamy's Approx
+                small_x = x/(x+y+z)
+                small_y = y/(x+y+z)
+
+                n = (small_x-0.3320)/(0.1858-small_y)
+                cct = 437*(n**3) + 3601*(n**2) + 6861*n + 5517
+
+                if DEBUG:
+                    logger.debug(f"[me_mccamy] calc x = {small_x}, calc y = {small_y} | Calc CCT = {cct} K")
+            elif curr_method in XY_TO_CCT_METHODS:
+                xyz_arr = np_array([x, y, z])
+                xy_arr = XYZ_to_xy(xyz_arr)
+                cct = xy_to_CCT(xy_arr, curr_method)
+                if DEBUG:
+                    logger.debug(f"[{curr_method}] calc x,y = {xy_arr} | CCT = {cct}")
+            else:
+                options = ["me_mccamy"] + list(XY_TO_CCT_METHODS)
+
+                logger.error(f"{curr_method} Not found!\nCCT calculation methods: \n {options}")
+
+                return
+
+            ccts.append(int(cct))
+
+        if len(ccts) == 1:
+            return ccts[0]
+        else:
+            return ccts
 
     # Read measurement data (EV, TCP, Δuv)              08
-    def get_delta_uv(self):
+    def get_delta_uv(self) -> tuple:
         '''
         Return:
              lux, tcp, delta_uv
@@ -230,15 +246,15 @@ class ChromaMeterKonica(object):
                 logger.debug(f"Illuminance: {lux} lux, TCP: {tcp}, DeltaUV: {delta_uv}")
 
             return lux, tcp, delta_uv
-        except IndexError as e:
+        except IndexError as err:
             logger.debug(f"result: {result}")
-            logger.error(e)
+            logger.error(err)
             exit(1)
 
 
 if __name__ == "__main__":
     try:
-        luxmeter = ChromaMeterKonica()
+        luxmeter = CL200A()
     except Exception as e:
         logger.exception(e)
         exit(0)
@@ -250,9 +266,15 @@ if __name__ == "__main__":
 
         # luxmeter.get_lux()
         # print(luxmeter.get_xyz())
-        luxmeter.get_cct()
+        test_suite = ["me_mccamy", "Hernandez 1999"]
+
+        logger.debug("Testing...")
+        tests = luxmeter.get_cct(test_suite)
+
+        for num, test in enumerate(test_suite):
+            print(f"{test}: {tests[num]} K")
+
         # print(luxmeter.get_delta_uv())
-        logger.debug("next..")
 
         # if curr_lux:
         #     print(f"Reading: {curr_lux} LUX")

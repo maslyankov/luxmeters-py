@@ -41,7 +41,7 @@ cl200a_cmd_dict = {'command_01': '00011200',
                    'command_55': '99551  0', }
 
 
-def find_all_serial_ports():
+def find_all_serial_ports() -> list:
     """
     Find all serial ports
     :return: List containing all serial ports.
@@ -52,7 +52,7 @@ def find_all_serial_ports():
     return list
 
 
-def find_all_luxmeters():
+def find_all_luxmeters() -> list:
     """ Get all lux meters connected into PC."""
     logger.info("Looking for luxmeters...")
     found_ports = find_all_serial_ports()
@@ -67,7 +67,7 @@ def find_all_luxmeters():
         return
 
 
-def connection_konica(ser):
+def connection_konica(ser) -> bool:
     """Switch the CL-200A to PC connection mode. (Command "54").
     In order to perform communication with a PC, this command must be used to set the CL-200A to PC connection mode.
     """
@@ -104,7 +104,7 @@ def connection_konica(ser):
     return return_connection
 
 
-def serial_port_luxmeter():
+def serial_port_luxmeter() -> str:
     """
     Find out which port is for each luxmeter
     :return: String containing COM port number
@@ -125,7 +125,7 @@ def serial_port_luxmeter():
 
 
 def connect_serial_port(port, baudrate=9600, parity=PARITY_NONE,
-                        stopbits=STOPBITS_ONE, bytesize=EIGHTBITS, timeout=3):
+                        stopbits=STOPBITS_ONE, bytesize=EIGHTBITS, timeout=3) -> object:
     """
     Perform serial connection
     :param port: Int containing the COM port.
@@ -146,7 +146,7 @@ def connect_serial_port(port, baudrate=9600, parity=PARITY_NONE,
     return ser
 
 
-def cmd_formatter(cmd):
+def cmd_formatter(cmd) -> str:
     """
     Given a command, verify XOR ( Or Exclusive) byte per byte.
     :param cmd: String with a serial command.
@@ -163,7 +163,7 @@ def cmd_formatter(cmd):
     return stx + cmd + etx + bcc + delimiter
 
 
-def write_serial_port(ser, cmd, sleep_time, obj=None):
+def write_serial_port(ser, cmd, sleep_time, obj=None) -> None:
     """
     Writes in any serial port.
     :param ser: Serial object
@@ -184,7 +184,7 @@ def write_serial_port(ser, cmd, sleep_time, obj=None):
     ser.reset_input_buffer()
 
 
-def check_measurement(result):
+def check_measurement(result) -> None:
     if result[6] in ['1', '2', '3']:
         err = 'Switch off the CL-200A and then switch it back on'
         logger.error(f'Error {err}')
@@ -204,7 +204,7 @@ def check_measurement(result):
         raise ConnectionAbortedError(err)
 
 
-def calc_lux(result):
+def calc_lux(result) -> float:
     if result[9] == '+':
         signal = 1
     else:
@@ -218,7 +218,7 @@ def calc_lux(result):
     return lux
 
 
-def clean_obj_port(obj):
+def clean_obj_port(obj) -> None:
     """ Perform object buffer cleaning """
     obj.close()
     if not obj.isOpen():
