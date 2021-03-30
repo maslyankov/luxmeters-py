@@ -8,7 +8,7 @@ import datetime
 
 import serial
 
-import serial.tools.list_ports
+import serial.tools.list_ports as serial_list_ports
 
 baud = 19200
 timeout = 0.2
@@ -97,7 +97,7 @@ def load_options():
 
 
 def list_ports():
-    ports = serial.tools.list_ports.comports()
+    ports = serial_list_ports.comports()
     ret_ports = list()
 
     for num, (port, desc, hwid) in enumerate(sorted(ports)):
