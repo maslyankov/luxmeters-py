@@ -1,14 +1,15 @@
 #! /usr/bin/env python3
 
-import sys
-import copy
-import time
-import argparse
-import datetime
+from sys import stderr, stdout
+# import copy
+# import time
+from argparse import ArgumentParser
+from datetime import datetime
 
-import serial
+from serial import Serial
 
-import serial.tools.list_ports as serial_list_ports
+from serial_utils import find_all_luxmeters
+from logs import logger
 
 baud = 19200
 timeout = 0.2
@@ -58,7 +59,7 @@ bitwise_fields = ['mode', ]
 
 def init(port):
     global com
-    com = serial.Serial(port, baud, timeout=timeout)
+    com = Serial(port, baud, timeout=timeout)
 
 
 def cleanup():
@@ -66,11 +67,12 @@ def cleanup():
 
 
 def build_parser():
-    p = argparse.ArgumentParser(description='Utility for operating the Uni-T UT382 USB luxmeter.',
-                                epilog='  \n'.join((
-                                    'Todo: program meter settings, start monitor remotely, download logged readings.'
-                                    'To run --monitor for 12 hours and then automatically stop: "timeout -s INT 12h python3 ut382.py --monitor"',
-                                )))
+    p = ArgumentParser(description='Utility for operating the Uni-T UT382 USB luxmeter.',
+                       epilog='  \n'.join((
+                           'Todo: program meter settings, start monitor remotely, download logged readings.'
+                           'To run --monitor for 12 hours and then automatically stop: '
+                           '"timeout -s INT 12h python3 ut382.py --monitor"',
+                       )))
     p.add_argument('--port', dest='port', default=False,
                    help='Location of serial port')
     p.add_argument('--file', dest='path', default='',
@@ -96,23 +98,6 @@ def load_options():
     return options
 
 
-def list_ports():
-    ports = serial_list_ports.comports()
-    ret_ports = list()
-
-    for num, (port, desc, hwid) in enumerate(sorted(ports)):
-        print("({}) {}: {} [{}]".format(num, port, desc, hwid))
-        ret_ports.append(
-            {
-                "port": port,
-                "desc": desc,
-                "hwid": hwid
-            }
-        )
-
-    return ret_ports
-
-
 def listen(n=33):
     reply = list(com.read(n))
     if reply and type(reply[0]) == str:  # python2
@@ -121,7 +106,7 @@ def listen(n=33):
 
 
 def decode_lcd_byte(i, b):
-    summary = {}
+    summary = dict()
     for k, v in lcd_table.items():
         n, mask, lut = v
         if n != i:
@@ -129,7 +114,7 @@ def decode_lcd_byte(i, b):
         summary[k] = None
         b2 = mask & b
         if k in bitwise_fields:
-            summary[k] = []
+            summary[k] = list()
             for k2, v2 in lut.items():
                 if k2 & b2:
                     summary[k].append(v2)
@@ -145,7 +130,7 @@ def pretty_byte(i, b):
 
 
 def decode_raw(bs):
-    weird = []
+    weird = list()
     if len(bs) != 33:
         weird.append('wrong message length %i' % len(bs))
     for i, b in enumerate(bs):
@@ -159,18 +144,18 @@ def decode_raw(bs):
         weird.append('bad byte 31')
     # last byte might be a checksum?
     # usually consistent, sometimes wiggles between two values
-    bs2 = []
+    bs2 = list()
     for i in range(1, len(bs), 2):
         if i >= 31:
             break
         bs2.append((bs[i - 1] & 0x0F) | ((bs[i] & 0x0F) * 16))
     if weird:
-        sys.stderr.write(str(weird))
+        stderr.write(str(weird))
     return bs2, bool(weird)
 
 
 def decode_summary(reply):
-    summary = {}
+    summary = dict()
     for i, b in enumerate(reply):
         summary.update(decode_lcd_byte(i, b))
     return summary
@@ -201,8 +186,8 @@ def decode_lux(summary):
 
 def live_raw():
     com.timeout = 0.02  # single byte timeout
-    reply = []
-    reply2 = []
+    # reply = list()
+    reply2 = list()
 
     error_countdown = 10
 
@@ -221,11 +206,13 @@ def live_raw():
                 continue
 
         yield reply2
-        reply2 = []
+        reply2 = list()
 
 
 def live_sync():
-    "throw away the first partial, then be efficient"
+    """
+    throw away the first partial, then be efficient
+    """
     err = True
     while True:
         if err:  # re-sync
@@ -260,16 +247,16 @@ def live_debug():
         reply, err = decode_raw(bs)
         for i, b in enumerate(reply):
             pretty_byte(i, b)
-        summary = decode_summary(reply)
+        decode_summary(reply)
         print()
 
 
 def live_monitor(strftime):
     for reply in live_sync():
-        t = datetime.datetime.now().strftime(strftime)
+        t = datetime.now().strftime(strftime)
         summary = decode_summary(reply)
         if summary['batt']:
-            sys.stderr.write('Warning: battery low')
+            stderr.write('Warning: battery low')
         if summary['menu']:
             continue
         lux, unit = decode_lux(summary)
@@ -278,7 +265,7 @@ def live_monitor(strftime):
 
 def live_average(strftime, duration):
     samples = duration * 8.0
-    history = []
+    history = list()
     for data in live_monitor(strftime):
         if data['lux'] is None:
             continue
@@ -287,11 +274,11 @@ def live_average(strftime, duration):
             continue
         data['ave_lux'] = sum(history) / len(history)
         yield data
-        history = []
+        history = list()
 
 
 def core(options):
-    redirect = sys.stdout
+    redirect = stdout
     old = None
     new = None
     if options.path:
@@ -328,21 +315,32 @@ def ut382():
     print(options.port)
 
     if not options.port:
-        found_ports = list_ports()
+        found_ports = find_all_luxmeters("FTDI")  # TODO: Set correct manufacturer name
+        ports_cnt = len(found_ports)
+        if ports_cnt > 1:
+            for num, item in enumerate(found_ports):
+                logger.info(f"{num}) {item}")
 
-        ans_serial = input("Choose serial port"
-                           "\ntype x to abort"
-                           "\nAns: ")
+            ans_serial = input("Choose serial port"
+                               "\ntype x to abort"
+                               "\nAns: ")
+            if ans_serial == 'x':
+                return
+            elif ans_serial.isdigit() and 0 <= int(ans_serial) < ports_cnt:
+                ans_serial = found_ports[ans_serial]
+            else:
+                logger.error("Wrong input.")
+
+        elif len(found_ports) == 1:
+            ans_serial = found_ports[0]
+        else:
+            logger.debug("No luxmeters found!")
+            return
 
         options.monitor = True
         options.delta = True
 
-        if ans_serial == 'x':
-            return
-        elif int(ans_serial) and int(ans_serial) < len(list_ports()):
-            choosen_port = found_ports[int(ans_serial)]
-            print(choosen_port)
-            options.port = choosen_port['port']
+        options.port = ans_serial
 
     init(options.port)
 
@@ -352,7 +350,7 @@ def ut382():
         core(options)
     except KeyboardInterrupt:
         pass
-    except:
+    except Exception:
         cleanup()
         raise
 

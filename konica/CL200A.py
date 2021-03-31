@@ -24,7 +24,6 @@ class CL200A(object):
     def __init__(self) -> object:
         self.cmd_dict = cl200a_cmd_dict
         self.port = serial_port_luxmeter()
-        self.is_alive = True
 
         try:
             self.ser = connect_serial_port(self.port, parity=PARITY_EVEN, bytesize=SEVENBITS)
@@ -35,9 +34,9 @@ class CL200A(object):
             self.__connection()
             self.__hold_mode()
             self.__ext_mode()
-        except SerialException:
-            # logger.error(f"'Lux meter not found. Check that the cable is properly connected.'")
-            raise Exception(f"'Lux meter not found. Check that the cable is properly connected.'")
+        except SerialException as err:
+            logger.error(err)
+            raise Exception(f"Lux meter not found. Check that the cable is properly connected.")
 
     def __connection(self):
         """
@@ -66,7 +65,7 @@ class CL200A(object):
                     logger.warn(f'Error: Attempt one more time')
                     continue
                 else:
-                    logger.error('Konica Minolta CL-200a has an error. Please verify USB cable.')
+                    raise SerialException('Konica Minolta CL-200A has an error. Please verify USB cable.')
 
     def __hold_mode(self):
         """
@@ -102,15 +101,12 @@ class CL200A(object):
             elif ext_mode_err[6:7] in ['1', '2', '3']:
                 logger.error('Set hold mode error')
                 err = "Switch off the CL-200A and then switch it back on"
-                logger.error(err)
+                logger.info(err)
                 raise ConnectionError(err)
             else:
                 break
 
     def perform_measurement(self, read_cmd) -> str:
-        if not self.is_alive:
-            return
-
         self.ser.reset_input_buffer()
         self.ser.reset_output_buffer()
         # Check if device still here
@@ -129,9 +125,7 @@ class CL200A(object):
 
             result = serial_ret.decode('ascii')
         except SerialException:
-            self.is_alive = False
-            logger.error('Connection to Luxmeter was lost.')
-            return
+            raise ConnectionAbortedError('Connection to Luxmeter was lost.')
 
         check_measurement(result)
 
@@ -155,10 +149,9 @@ class CL200A(object):
                 logger.debug(f"Returning {lux} luxes")
 
             return lux
-        except IndexError as e:
+        except IndexError as err:
             logger.debug(f"result: {result}")
-            logger.error(e)
-            exit(1)
+            raise ValueError(err)
 
     # Read measurement data (X, Y, Z)                   01
     def get_xyz(self) -> tuple:
@@ -175,10 +168,9 @@ class CL200A(object):
                 logger.debug(f"X: {x}, Y: {y}, Z: {z}")
 
             return x, y, z
-        except IndexError as e:
+        except IndexError as err:
             logger.debug(f"result: {result}")
-            logger.error(e)
-            exit(1)
+            raise ValueError(err)
 
     def get_cct(self, methods="Hernandez 1999"):
         '''
@@ -248,8 +240,7 @@ class CL200A(object):
             return lux, tcp, delta_uv
         except IndexError as err:
             logger.debug(f"result: {result}")
-            logger.error(err)
-            exit(1)
+            raise ValueError(err)
 
 
 if __name__ == "__main__":
@@ -269,10 +260,11 @@ if __name__ == "__main__":
         test_suite = ["me_mccamy", "Hernandez 1999"]
 
         logger.debug("Testing...")
+
         tests = luxmeter.get_cct(test_suite)
 
         for num, test in enumerate(test_suite):
-            print(f"{test}: {tests[num]} K")
+            logger.info(f"{test}: {tests[num]} K")
 
         # print(luxmeter.get_delta_uv())
 
@@ -288,3 +280,4 @@ if __name__ == "__main__":
         #         break
 
         # sleep(1)
+        print("")  # Add a blank line for readability
