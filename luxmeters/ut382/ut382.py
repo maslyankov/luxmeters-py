@@ -8,8 +8,8 @@ from datetime import datetime
 
 from serial import Serial
 
-from serial_utils import find_all_luxmeters
-from logs import logger
+from luxmeters import serial_utils
+from luxmeters import logs
 
 baud = 19200
 timeout = 0.2
@@ -315,11 +315,11 @@ def ut382():
     print(options.port)
 
     if not options.port:
-        found_ports = find_all_luxmeters("FTDI")  # TODO: Set correct manufacturer name
+        found_ports = serial_utils.find_all_luxmeters("FTDI")  # TODO: Set correct manufacturer name
         ports_cnt = len(found_ports)
         if ports_cnt > 1:
             for num, item in enumerate(found_ports):
-                logger.info(f"{num}) {item}")
+                logs.logger.info(f"{num}) {item}")
 
             ans_serial = input("Choose serial port"
                                "\ntype x to abort"
@@ -329,12 +329,12 @@ def ut382():
             elif ans_serial.isdigit() and 0 <= int(ans_serial) < ports_cnt:
                 ans_serial = found_ports[ans_serial]
             else:
-                logger.error("Wrong input.")
+                logs.logger.error("Wrong input.")
 
         elif len(found_ports) == 1:
             ans_serial = found_ports[0]
         else:
-            logger.debug("No luxmeters found!")
+            logs.logger.debug("No luxmeters found!")
             return
 
         options.monitor = True

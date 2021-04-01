@@ -2,9 +2,8 @@
 from time import sleep
 from serial import PARITY_EVEN, SEVENBITS, SerialException
 
-from logs import logger
-from CL200A_utils import cl200a_cmd_dict, cmd_formatter, write_serial_port, \
-                  serial_port_luxmeter, connect_serial_port, check_measurement, calc_lux
+from luxmeters import logs
+from luxmeters.konica import CL200A_utils
 
 from numpy import array as np_array
 from colour import XY_TO_CCT_METHODS, XYZ_to_xy, xy_to_CCT
@@ -22,20 +21,20 @@ class CL200A(object):
     """
 
     def __init__(self) -> object:
-        self.cmd_dict = cl200a_cmd_dict
-        self.port = serial_port_luxmeter()
+        self.cmd_dict = CL200A_utils.cl200a_cmd_dict
+        self.port = CL200A_utils.serial_port_luxmeter()
 
         try:
-            self.ser = connect_serial_port(self.port, parity=PARITY_EVEN, bytesize=SEVENBITS)
+            self.ser = CL200A_utils.connect_serial_port(self.port, parity=PARITY_EVEN, bytesize=SEVENBITS)
         except SerialException:
-            # logger.error('Error: Could not connect to Lux Meter')
+            # logs.logger.error('Error: Could not connect to Lux Meter')
             raise Exception("Could not connect to luxmeter")
         try:
             self.__connection()
             self.__hold_mode()
             self.__ext_mode()
         except SerialException as err:
-            logger.error(err)
+            logs.logger.error(err)
             raise Exception(f"Lux meter not found. Check that the cable is properly connected.")
 
     def __connection(self):
@@ -46,12 +45,12 @@ class CL200A(object):
         :return: None
         """
 
-        # cmd_request = utils.cmd_formatter(self.cl200a_cmd_dict['command_54'])
+        # cmd_request = CL200A_utils.cmd_formatter(self.CL200A_utils.cl200a_cmd_dict['command_54'])
         cmd_request = chr(2) + '00541   ' + chr(3) + '13\r\n'
-        cmd_response = cmd_formatter(self.cmd_dict['command_54r'])
+        cmd_response = CL200A_utils.cmd_formatter(self.cmd_dict['command_54r'])
 
         for i in range(2):
-            write_serial_port(obj=self, ser=self.ser, cmd=cmd_request, sleep_time=0.5)
+            CL200A_utils.write_serial_port(obj=self, ser=self.ser, cmd=cmd_request, sleep_time=0.5)
             pc_connected_mode = self.ser.readline().decode('ascii')
             self.ser.reset_input_buffer()
             self.ser.reset_output_buffer()
@@ -62,7 +61,7 @@ class CL200A(object):
                 if cmd_response in pc_connected_mode:
                     break
                 elif i == 0:
-                    logger.warn(f'Error: Attempt one more time')
+                    logs.logger.warn(f'Error: Attempt one more time')
                     continue
                 else:
                     raise SerialException('Konica Minolta CL-200A has an error. Please verify USB cable.')
@@ -72,11 +71,11 @@ class CL200A(object):
         Aux function that sets Konica in to hold mode.
         :return: None
         """
-        cmd = cmd_formatter(self.cmd_dict['command_55'])
+        cmd = CL200A_utils.cmd_formatter(self.cmd_dict['command_55'])
         # Hold status
         self.ser.reset_input_buffer()
         self.ser.reset_output_buffer()
-        write_serial_port(obj=self, ser=self.ser, cmd=cmd, sleep_time=0.5)
+        CL200A_utils.write_serial_port(obj=self, ser=self.ser, cmd=cmd, sleep_time=0.5)
 
     def __ext_mode(self):
         """
@@ -85,13 +84,13 @@ class CL200A(object):
         EXT mode is the mode for taking measurements according to the timing commands from the PC.
         :return: None
         """
-        cmd = cmd_formatter(self.cmd_dict['command_40'])
+        cmd = CL200A_utils.cmd_formatter(self.cmd_dict['command_40'])
         self.ser.reset_input_buffer()
         self.ser.reset_output_buffer()
 
         for i in range(2):
             # set CL-200A to EXT mode
-            write_serial_port(obj=self, ser=self.ser, cmd=cmd, sleep_time=0.125)
+            CL200A_utils.write_serial_port(obj=self, ser=self.ser, cmd=cmd, sleep_time=0.125)
             ext_mode_err = self.ser.readline().decode('ascii')
             # If an error occurred when setting EXT mode (ERR byte = "4"), hold_mode was not completed
             # correctly. Repeat hold_mode and then set EXT mode again.
@@ -99,9 +98,9 @@ class CL200A(object):
                 self.__hold_mode()
                 continue
             elif ext_mode_err[6:7] in ['1', '2', '3']:
-                logger.error('Set hold mode error')
+                logs.logger.error('Set hold mode error')
                 err = "Switch off the CL-200A and then switch it back on"
-                logger.info(err)
+                logs.logger.info(err)
                 raise ConnectionError(err)
             else:
                 break
@@ -112,25 +111,25 @@ class CL200A(object):
         # Check if device still here
 
         # Perform measurement
-        cmd_ext = cmd_formatter(self.cmd_dict['command_40r'])
-        cmd_read = cmd_formatter(read_cmd)
-        write_serial_port(obj=self, ser=self.ser, cmd=cmd_ext, sleep_time=0.5)
+        cmd_ext = CL200A_utils.cmd_formatter(self.cmd_dict['command_40r'])
+        cmd_read = CL200A_utils.cmd_formatter(read_cmd)
+        CL200A_utils.write_serial_port(obj=self, ser=self.ser, cmd=cmd_ext, sleep_time=0.5)
         # read data
-        write_serial_port(obj=self, ser=self.ser, cmd=cmd_read, sleep_time=0)
+        CL200A_utils.write_serial_port(obj=self, ser=self.ser, cmd=cmd_read, sleep_time=0)
         try:
             serial_ret = self.ser.readline()
             if not len(serial_ret):
-                logger.debug(f"Serial got: {serial_ret}")
+                logs.logger.debug(f"Serial got: {serial_ret}")
                 return
 
             result = serial_ret.decode('ascii')
         except SerialException:
             raise ConnectionAbortedError('Connection to Luxmeter was lost.')
 
-        check_measurement(result)
+        CL200A_utils.check_measurement(result)
 
         if DEBUG:
-            logger.debug(f"Got raw data: {result.rstrip()}")
+            logs.logger.debug(f"Got raw data: {result.rstrip()}")
 
         return result
 
@@ -143,14 +142,14 @@ class CL200A(object):
             result = self.perform_measurement(self.cmd_dict['command_02'])
 
             # Convert Measurement
-            lux = calc_lux(result)
+            lux = CL200A_utils.calc_lux(result)
 
             if DEBUG:
-                logger.debug(f"Returning {lux} luxes")
+                logs.logger.debug(f"Returning {lux} luxes")
 
             return lux
         except IndexError as err:
-            logger.debug(f"result: {result}")
+            logs.logger.debug(f"result: {result}")
             raise ValueError(err)
 
     # Read measurement data (X, Y, Z)                   01
@@ -165,11 +164,11 @@ class CL200A(object):
             # multiply = result[7:9]
 
             if DEBUG:
-                logger.debug(f"X: {x}, Y: {y}, Z: {z}")
+                logs.logger.debug(f"X: {x}, Y: {y}, Z: {z}")
 
             return x, y, z
         except IndexError as err:
-            logger.debug(f"result: {result}")
+            logs.logger.debug(f"result: {result}")
             raise ValueError(err)
 
     def get_cct(self, methods="Hernandez 1999"):
@@ -181,7 +180,7 @@ class CL200A(object):
         if 0 in [x, y, z]:
             return 0.0
 
-        logger.debug(f"x = {x}, y = {y}, z = {z}")
+        logs.logger.debug(f"x = {x}, y = {y}, z = {z}")
 
         if isinstance(methods, str):
             methods = [methods]
@@ -198,17 +197,17 @@ class CL200A(object):
                 cct = 437*(n**3) + 3601*(n**2) + 6861*n + 5517
 
                 if DEBUG:
-                    logger.debug(f"[me_mccamy] calc x = {small_x}, calc y = {small_y} | Calc CCT = {cct} K")
+                    logs.logger.debug(f"[me_mccamy] calc x = {small_x}, calc y = {small_y} | Calc CCT = {cct} K")
             elif curr_method in XY_TO_CCT_METHODS:
                 xyz_arr = np_array([x, y, z])
                 xy_arr = XYZ_to_xy(xyz_arr)
                 cct = xy_to_CCT(xy_arr, curr_method)
                 if DEBUG:
-                    logger.debug(f"[{curr_method}] calc x,y = {xy_arr} | CCT = {cct}")
+                    logs.logger.debug(f"[{curr_method}] calc x,y = {xy_arr} | CCT = {cct}")
             else:
                 options = ["me_mccamy"] + list(XY_TO_CCT_METHODS)
 
-                logger.error(f"{curr_method} Not found!\nCCT calculation methods: \n {options}")
+                logs.logger.error(f"{curr_method} Not found!\nCCT calculation methods: \n {options}")
 
                 return
 
@@ -229,17 +228,17 @@ class CL200A(object):
             result = self.perform_measurement(self.cmd_dict['command_08'])
             # Convert Measurement
             # Calc lux
-            lux = calc_lux(result)
+            lux = CL200A_utils.calc_lux(result)
 
             tcp = float(result[16:20]) / 10
             delta_uv = float(result[22:26]) / 10
 
             if DEBUG:
-                logger.debug(f"Illuminance: {lux} lux, TCP: {tcp}, DeltaUV: {delta_uv}")
+                logs.logger.debug(f"Illuminance: {lux} lux, TCP: {tcp}, DeltaUV: {delta_uv}")
 
             return lux, tcp, delta_uv
         except IndexError as err:
-            logger.debug(f"result: {result}")
+            logs.logger.debug(f"result: {result}")
             raise ValueError(err)
 
 
@@ -247,7 +246,7 @@ if __name__ == "__main__":
     try:
         luxmeter = CL200A()
     except Exception as e:
-        logger.exception(e)
+        logs.logger.exception(e)
         exit(0)
 
     timeout = 3
@@ -258,12 +257,12 @@ if __name__ == "__main__":
         # print(luxmeter.get_xyz())
         test_suite = ["me_mccamy", "Hernandez 1999"]
 
-        logger.debug("Testing...")
+        logs.logger.debug("Testing...")
 
-        tests = luxmeter.get_cct(test_suite)
-
-        for num, test in enumerate(test_suite):
-            logger.info(f"{test}: {tests[num]} K")
+        # tests = luxmeter.get_cct(test_suite)
+        #
+        # for num, test in enumerate(test_suite):
+        #     logs.logger.info(f"{test}: {tests[num]} K")
 
         # print(luxmeter.get_delta_uv())
 

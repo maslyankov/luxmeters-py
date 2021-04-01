@@ -17,8 +17,8 @@
 from serial import Serial, SerialException, PARITY_NONE, STOPBITS_ONE, EIGHTBITS, PARITY_EVEN, STOPBITS_TWO, SEVENBITS
 from time import sleep
 
-from serial_utils import list_ports, find_all_luxmeters
-from logs import logger
+from luxmeters import serial_utils
+from luxmeters import logs
 
 SKIP_CHECK_LIST = True
 
@@ -45,7 +45,7 @@ def connection_konica(ser) -> bool:
     """Switch the CL-200A to PC connection mode. (Command "54").
     In order to perform communication with a PC, this command must be used to set the CL-200A to PC connection mode.
     """
-    logger.info("Setting CL-200A to PC connection mode")
+    logs.logger.info("Setting CL-200A to PC connection mode")
     # cmd_request = utils.cmd_formatter(self.cl200a_cmd_dict['command_54'])
     cmd_request = chr(2) + '00541   ' + chr(3) + '13\r\n'
     cmd_response = cmd_formatter(cl200a_cmd_dict['command_54r'])
@@ -55,7 +55,7 @@ def connection_konica(ser) -> bool:
         try:
             ser_read = ser.readline()
         except SerialException as e:
-            logger.exception(e)
+            logs.logger.exception(e)
             return_connection = False
 
             return return_connection
@@ -83,7 +83,7 @@ def serial_port_luxmeter() -> str:
     Find out which port is for each luxmeter
     :return: String containing COM port number
     """
-    comports = find_all_luxmeters('FTDI')
+    comports = serial_utils.find_all_luxmeters('FTDI')
     port = None
     ser = None
     for comport in comports:
@@ -94,7 +94,7 @@ def serial_port_luxmeter() -> str:
     try:
         ser.close()
     except AttributeError as e:
-        logger.critical(e)
+        logs.logger.critical(e)
     return port
 
 
@@ -151,7 +151,7 @@ def write_serial_port(ser, cmd, sleep_time, obj=None) -> None:
     except SerialException:
         if obj:
             obj.isAlive = False
-        logger.error("Connection to Luxmeter was lost.")
+        logs.logger.error("Connection to Luxmeter was lost.")
         return
 
     sleep(sleep_time)
@@ -161,20 +161,20 @@ def write_serial_port(ser, cmd, sleep_time, obj=None) -> None:
 def check_measurement(result) -> None:
     if result[6] in ['1', '2', '3']:
         err = 'Switch off the CL-200A and then switch it back on'
-        logger.error(f'Error {err}')
+        logs.logger.error(f'Error {err}')
         raise ConnectionResetError(err)
     if result[6] == '5':
-        logger.error('Measurement value over error. The measurement exceed the CL-200A measurement range.')
+        logs.logger.error('Measurement value over error. The measurement exceed the CL-200A measurement range.')
     if result[6] == '6':
         err = 'Low luminance error. Luminance is low, resulting in reduced calculation accuracy ' \
               'for determining chromaticity'
-        logger.error(f'{err}')
+        logs.logger.error(f'{err}')
     # if result[7] == '6':
     #     err= 'Switch off the CL-200A and then switch it back on'
     #     raise Exception(err)
     if result[8] == '1':
         err = 'Battery is low. The battery should be changed immediately or the AC adapter should be used.'
-        logger.error(err)
+        logs.logger.error(err)
         raise ConnectionAbortedError(err)
 
 

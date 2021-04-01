@@ -1,5 +1,5 @@
 import serial.tools.list_ports as serial_list_ports
-from logs import logger
+from luxmeters import logs
 
 
 def list_ports() -> list():
@@ -20,13 +20,13 @@ def list_ports() -> list():
 
 def find_all_luxmeters(keyword) -> list:
     """ Get all lux meters connected into PC."""
-    logger.info("Looking for luxmeters...")
+    logs.logger.info("Looking for luxmeters...")
     found_ports = list_ports()
 
     if found_ports:
         ret = [p["device"] for p in found_ports if "manufacturer" in p and keyword in p["manufacturer"]]
 
-        logger.debug(f"Found luxmeters: {ret}")
+        logs.logger.debug(f"Found luxmeters: {ret}")
         return ret
     else:
         return
