@@ -254,7 +254,6 @@ if __name__ == "__main__":
 
     while True:
         # curr_lux = luxmeter.get_lux()
-
         # luxmeter.get_lux()
         # print(luxmeter.get_xyz())
         test_suite = ["me_mccamy", "Hernandez 1999"]
