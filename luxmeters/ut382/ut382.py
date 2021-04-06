@@ -190,6 +190,7 @@ def live_raw():
     reply2 = list()
 
     error_countdown = 10
+    msg_shown = False
 
     while True:
         reply = listen(1)
@@ -203,6 +204,10 @@ def live_raw():
 
                 continue
             else:
+                if not msg_shown:
+                    print("Are you sure you enabled USB mode? (Hold menu, click +, 5x menu)")
+                    msg_shown = True
+
                 continue
 
         yield reply2
@@ -311,11 +316,11 @@ def core(options):
 
 def ut382():
     options = load_options()
-
-    print(options.port)
+    # print(options.port)
 
     if not options.port:
-        found_ports = serial_utils.find_all_luxmeters("FTDI")  # TODO: Set correct manufacturer name
+        found_ports = serial_utils.find_all_luxmeters("Silicon Labs")  # TODO: Set correct manufacturer name
+
         ports_cnt = len(found_ports)
         if ports_cnt > 1:
             for num, item in enumerate(found_ports):
@@ -333,6 +338,7 @@ def ut382():
 
         elif len(found_ports) == 1:
             ans_serial = found_ports[0]
+            print(f'Found port {ans_serial}')
         else:
             logs.logger.debug("No luxmeters found!")
             return
