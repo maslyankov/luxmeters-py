@@ -10,6 +10,7 @@ from serial import Serial
 
 from luxmeters import serial_utils
 from luxmeters import logs
+from luxmeters.ut382 import ut382_utils
 
 baud = 19200
 timeout = 0.2
@@ -24,38 +25,6 @@ port to C/C++ so windows-people don't need python
 base: https://github.com/parametrek/gm1020/blob/master/ut382.py
 """
 
-lcd_7seg = {0x00: None, 0x7B: 0, 0x60: 1, 0x5E: 2, 0x7C: 3,
-            0x65: 4, 0x3D: 5, 0x3F: 6, 0x70: 7, 0x7F: 8, 0x7D: 9,
-            0x6B: 'U', 0x2F: 'b', 0x77: 'A', 0x57: 'P', 0x1F: 'E', 0x1B: 'C',
-            0x6D: 'd', 0x1F: 'E', 0x6E: 'd', 0x17: 'F', 0x56: '?', 0x0B: 'L',
-            }
-# key : (byte, mask, {bits:value})
-lcd_table = {
-    'big_1': (1, 0x7F, lcd_7seg),
-    'big_10': (2, 0x7F, lcd_7seg),
-    'big_100': (3, 0x7F, lcd_7seg),
-    'big_1000': (4, 0x7F, lcd_7seg),
-    'lil_1': (5, 0x7F, lcd_7seg),
-    'lil_10': (6, 0x7F, lcd_7seg),
-    'lil_100': (7, 0x7F, lcd_7seg),
-    'lil_1000': (8, 0x7F, lcd_7seg),
-    'big_10ths': (2, 0x80, {0x00: False, 0x80: True}),
-    'big_100ths': (3, 0x80, {0x00: False, 0x80: True}),
-    'big_1000ths': (4, 0x80, {0x00: False, 0x80: True}),
-    'mode': (11, 0xFF, {0x10: 'hold', 0x20: 'max', 0x40: 'min'}),
-    'auto': (10, 0x02, {0x00: False, 0x02: True}),
-    'scale': (10, 0xF0, {0x00: 2, 0x80: 20, 0xC0: 200, 0xE0: 2000, 0xF0: 20000}),
-    'unit': (9, 0x0C, {0x08: 'lux', 0x04: 'fc'}),
-    'x10': (9, 0x01, {0x00: False, 0x01: True}),
-    'poweroff': (11, 0x02, {0x00: False, 0x02: True}),
-    'batt': (9, 0x10, {0x00: False, 0x10: True}),
-    'rec': (11, 0x01, {0x00: False, 0x01: True}),
-    'usb': (9, 0x20, {0x00: False, 0x20: True}),
-    'menu': (0, 0xFF, {0x20: 'usb', 0x30: 'apo', 0x40: 'rec', 0x50: 'code', 0x60: 'def'}),
-    # missing: rel, clock, load#, full, lil_colon
-}
-bitwise_fields = ['mode', ]
-
 
 def init(port):
     global com
@@ -64,38 +33,6 @@ def init(port):
 
 def cleanup():
     com.close()
-
-
-def build_parser():
-    p = ArgumentParser(description='Utility for operating the Uni-T UT382 USB luxmeter.',
-                       epilog='  \n'.join((
-                           'Todo: program meter settings, start monitor remotely, download logged readings.'
-                           'To run --monitor for 12 hours and then automatically stop: '
-                           '"timeout -s INT 12h python3 ut382.py --monitor"',
-                       )))
-    p.add_argument('--port', dest='port', default=False,
-                   help='Location of serial port')
-    p.add_argument('--file', dest='path', default='',
-                   help='Path to save TSV data to (default: display on stdout)')
-    p.add_argument('--monitor', dest='monitor', action='store_true', default=False,
-                   help='Live samples from the meter.  8 per second.  Continues forever until ^C.')
-    p.add_argument('--delta', dest='delta', action='store_true', default=False,
-                   help='Only output data when the measurement changes.  Implies --monitor.')
-    p.add_argument('--moving-average', dest='moving', default=None, type=int, metavar='N',
-                   help='Average together the last N seconds for more stable readings.  Implies --monitor.')
-    dumb_argparse = default_timestamp.replace('%', '%%')
-    p.add_argument('--strftime', dest='strftime', default=default_timestamp, metavar='STRFTIME',
-                   help='  '.join(('Format string for timestamps during live monitoring.',
-                                   'Visit http://strftime.org/ (default: %s)' % dumb_argparse)))
-    return p
-
-
-def load_options():
-    parser = build_parser()
-    options = parser.parse_args()
-    if options.path == '-':
-        options.path = ''
-    return options
 
 
 def listen(n=33):
@@ -107,13 +44,13 @@ def listen(n=33):
 
 def decode_lcd_byte(i, b):
     summary = dict()
-    for k, v in lcd_table.items():
+    for k, v in ut382_utils.lcd_table.items():
         n, mask, lut = v
         if n != i:
             continue
         summary[k] = None
         b2 = mask & b
-        if k in bitwise_fields:
+        if k in ut382_utils.bitwise_fields:
             summary[k] = list()
             for k2, v2 in lut.items():
                 if k2 & b2:
@@ -280,6 +217,39 @@ def live_average(strftime, duration):
         data['ave_lux'] = sum(history) / len(history)
         yield data
         history = list()
+
+
+# TODO: Cleanup this following stuff
+def build_parser():
+    p = ArgumentParser(description='Utility for operating the Uni-T UT382 USB luxmeter.',
+                       epilog='  \n'.join((
+                           'Todo: program meter settings, start monitor remotely, download logged readings.'
+                           'To run --monitor for 12 hours and then automatically stop: '
+                           '"timeout -s INT 12h python3 ut382.py --monitor"',
+                       )))
+    p.add_argument('--port', dest='port', default=False,
+                   help='Location of serial port')
+    p.add_argument('--file', dest='path', default='',
+                   help='Path to save TSV data to (default: display on stdout)')
+    p.add_argument('--monitor', dest='monitor', action='store_true', default=False,
+                   help='Live samples from the meter.  8 per second.  Continues forever until ^C.')
+    p.add_argument('--delta', dest='delta', action='store_true', default=False,
+                   help='Only output data when the measurement changes.  Implies --monitor.')
+    p.add_argument('--moving-average', dest='moving', default=None, type=int, metavar='N',
+                   help='Average together the last N seconds for more stable readings.  Implies --monitor.')
+    dumb_argparse = default_timestamp.replace('%', '%%')
+    p.add_argument('--strftime', dest='strftime', default=default_timestamp, metavar='STRFTIME',
+                   help='  '.join(('Format string for timestamps during live monitoring.',
+                                   'Visit http://strftime.org/ (default: %s)' % dumb_argparse)))
+    return p
+
+
+def load_options():
+    parser = build_parser()
+    options = parser.parse_args()
+    if options.path == '-':
+        options.path = ''
+    return options
 
 
 def core(options):
