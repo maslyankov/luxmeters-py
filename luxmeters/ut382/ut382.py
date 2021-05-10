@@ -315,6 +315,7 @@ def ut382():
 
         options.monitor = True
         options.delta = True
+        options.moving = 2
 
         options.port = ans_serial
 

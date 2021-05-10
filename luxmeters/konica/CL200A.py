@@ -9,7 +9,7 @@ from numpy import array as np_array
 from colour import XY_TO_CCT_METHODS, XYZ_to_xy, xy_to_CCT
 
 SKIP_CHECK_LIST = True
-DEBUG = True
+DEBUG = False
 
 
 class CL200A(object):
@@ -253,11 +253,11 @@ if __name__ == "__main__":
 
     while True:
         # curr_lux = luxmeter.get_lux()
-        # luxmeter.get_lux()
+        luxmeter.get_lux()
         # print(luxmeter.get_xyz())
-        test_suite = ["me_mccamy", "Hernandez 1999"]
-
-        logs.logger.debug("Testing...")
+        # test_suite = ["me_mccamy", "Hernandez 1999"]
+        #
+        # logs.logger.debug("Testing...")
 
         # tests = luxmeter.get_cct(test_suite)
         #
