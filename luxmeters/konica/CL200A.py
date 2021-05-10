@@ -5,9 +5,6 @@ from serial import PARITY_EVEN, SEVENBITS, SerialException
 from luxmeters import logs
 from luxmeters.konica import CL200A_utils
 
-from numpy import array as np_array
-from colour import XY_TO_CCT_METHODS, XYZ_to_xy, xy_to_CCT
-
 SKIP_CHECK_LIST = True
 DEBUG = False
 
@@ -20,7 +17,7 @@ class CL200A(object):
     http://www.konicaminolta.com.cn/instruments/download/software/pdf/CL-200A_communication_specifications.pdf
     """
 
-    def __init__(self) -> object:
+    def __init__(self):
         self.cmd_dict = CL200A_utils.cl200a_cmd_dict
         self.port = CL200A_utils.serial_port_luxmeter()
 
@@ -170,53 +167,6 @@ class CL200A(object):
         except IndexError as err:
             logs.logger.debug(f"result: {result}")
             raise ValueError(err)
-
-    def get_cct(self, methods="Hernandez 1999"):
-        '''
-        approximate CCT using CIE 1931 xy values
-        '''
-        x, y, z = self.get_xyz()
-
-        if 0 in [x, y, z]:
-            return 0.0
-
-        logs.logger.debug(f"x = {x}, y = {y}, z = {z}")
-
-        if isinstance(methods, str):
-            methods = [methods]
-
-        ccts = list()
-
-        for curr_method in methods:
-            if curr_method == 'me_mccamy':
-                # McCamy's Approx
-                small_x = x/(x+y+z)
-                small_y = y/(x+y+z)
-
-                n = (small_x-0.3320)/(0.1858-small_y)
-                cct = 437*(n**3) + 3601*(n**2) + 6861*n + 5517
-
-                if DEBUG:
-                    logs.logger.debug(f"[me_mccamy] calc x = {small_x}, calc y = {small_y} | Calc CCT = {cct} K")
-            elif curr_method in XY_TO_CCT_METHODS:
-                xyz_arr = np_array([x, y, z])
-                xy_arr = XYZ_to_xy(xyz_arr)
-                cct = xy_to_CCT(xy_arr, curr_method)
-                if DEBUG:
-                    logs.logger.debug(f"[{curr_method}] calc x,y = {xy_arr} | CCT = {cct}")
-            else:
-                options = ["me_mccamy"] + list(XY_TO_CCT_METHODS)
-
-                logs.logger.error(f"{curr_method} Not found!\nCCT calculation methods: \n {options}")
-
-                return
-
-            ccts.append(int(cct))
-
-        if len(ccts) == 1:
-            return ccts[0]
-        else:
-            return ccts
 
     # Read measurement data (EV, TCP, Δuv)              08
     def get_delta_uv(self) -> tuple:

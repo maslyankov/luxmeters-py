@@ -18,13 +18,13 @@ def list_ports() -> list():
     return ret_ports
 
 
-def find_all_luxmeters(keyword) -> list:
+def find_all_luxmeters(keyword, target="manufacturer") -> list:
     """ Get all lux meters connected into PC."""
     logs.logger.info("Looking for luxmeters...")
     found_ports = list_ports()
 
     if found_ports:
-        ret = [p["device"] for p in found_ports if "manufacturer" in p and keyword in p["manufacturer"]]
+        ret = [p["device"] for p in found_ports if target in p and keyword in p[target]]
 
         logs.logger.debug(f"Found luxmeters: {ret}")
         return ret
