@@ -148,6 +148,11 @@ class CL200A(object):
         except IndexError as err:
             logs.logger.debug(f"result: {result}")
             raise ValueError(err)
+        except ValueError as err:
+            if DEBUG:
+                logs.logger.error(err)
+                logs.logger.debug(f"result: {result}")
+            return -1
 
     # Read measurement data (X, Y, Z)                   01
     def get_xyz(self) -> tuple:
@@ -167,6 +172,11 @@ class CL200A(object):
         except IndexError as err:
             logs.logger.debug(f"result: {result}")
             raise ValueError(err)
+        except ValueError as err:
+            if DEBUG:
+                logs.logger.error(err)
+                logs.logger.debug(f"result: {result}")
+            return -1, -1, -1
 
     # Read measurement data (EV, TCP, Δuv)              08
     def get_delta_uv(self) -> tuple:
@@ -190,6 +200,11 @@ class CL200A(object):
         except IndexError as err:
             logs.logger.debug(f"result: {result}")
             raise ValueError(err)
+        except ValueError as err:
+            if DEBUG:
+                logs.logger.error(err)
+                logs.logger.debug(f"result: {result}")
+            return -1, -1, -1
 
 
 if __name__ == "__main__":
@@ -228,4 +243,4 @@ if __name__ == "__main__":
         #         break
 
         # sleep(1)
-        print("")  # Add a blank line for readability
+        # print("")  # Add a blank line for readability
